@@ -1,4 +1,4 @@
--- XENOX cloud key gate. Set the public service URL; NEVER put server secrets here.
+-- FTW AutoWord cloud key gate. Set the public service URL; NEVER put server secrets here.
 
 local KEY_API = "https://xenox-keys.xenox-key-service.workers.dev"
 
@@ -10,7 +10,9 @@ local player = Players.LocalPlayer
 
 local env = (type(getgenv) == 'function' and getgenv()) or _G
 
-if type(env.XENO_KEY_STOP) == 'function' then pcall(env.XENO_KEY_STOP) end
+for _, name in ipairs({'FTW_AUTOWORD_KEY_STOP', 'XENO_KEY_STOP'}) do
+    if type(env[name]) == 'function' then pcall(env[name]) end
+end
 
 for _, name in ipairs({'FTW40_STOP', 'FTW41_STOP'}) do
 
@@ -20,9 +22,8 @@ end
 
 
 
-local function launchXenox()
-
--- Finish The Word | Xeno V41 (X-prefix fast path + fallback recovery)
+local function launchAutoWord()
+-- FTW AutoWord V41 (X-prefix fast path + fallback recovery)
 
 -- Client-side automation; game server decides whether any word is accepted.
 
@@ -74,7 +75,7 @@ local A = {alive=true, enabled=true, hint=false, mode='AUTO', input='auto', spee
 
 local CFG={USED='ftw_used_words_v37.txt',GOOD='ftw_word_history_v7.txt',COMMON='ftw_common_v5.txt',BIG='ftw_large_v5.txt'}
 
-local function safe(f,...) local ok,r=pcall(f,...); if ok then return r end; warn('[FTW V41]',r); return nil end
+local function safe(f,...) local ok,r=pcall(f,...); if ok then return r end; warn('[FTW AutoWord]',r); return nil end
 
 local function setStatus(s) A.status=tostring(s) end
 
@@ -378,7 +379,7 @@ round(frame,15);elem(frame,'UIStroke',{Color=C.border,Thickness=1})
 
 local hdr=elem(frame,'Frame',{BackgroundTransparency=1,Size=UDim2.new(1,0,0,51),Active=true})
 
-label(hdr,'FINISH THE WORD',UDim2.fromOffset(16,11),UDim2.fromOffset(220,26),16,true)
+label(hdr,'FTW AutoWord',UDim2.fromOffset(16,11),UDim2.fromOffset(220,26),16,true)
 
 label(hdr,'V40',UDim2.fromOffset(245,15),UDim2.fromOffset(45,20),11,true).TextColor3=C.yes
 
@@ -416,7 +417,7 @@ end)
 
 btn(area,'COPY DIAG',UDim2.fromOffset(191,307),UDim2.fromOffset(174,33),C.card,function()
 
-    local s=string.format('FTW V41 | stage=%s | prefix=%s | ourTurn=%s | input=%s | draft=%s | method=%s | words=%d | sent=%d | rival=%d | errors=%d | attempts=%d/%d',A.stage,A.prefix,tostring(A.ourTurn),A.lastInput,A.draft,A.method,D.loaded,A.submitted or 0,A.rivalCount or 0,A.failures,A.attemptsThisTurn,A.maxAttempts)
+    local s=string.format('FTW AutoWord | stage=%s | prefix=%s | ourTurn=%s | input=%s | draft=%s | method=%s | words=%d | sent=%d | rival=%d | errors=%d | attempts=%d/%d',A.stage,A.prefix,tostring(A.ourTurn),A.lastInput,A.draft,A.method,D.loaded,A.submitted or 0,A.rivalCount or 0,A.failures,A.attemptsThisTurn,A.maxAttempts)
 
     if type(setclipboard)=='function' then safe(setclipboard,s);setStatus('Copied diagnostic') end
 
@@ -1072,7 +1073,7 @@ task.spawn(function()
 
         setStatus('Loop error: '..tostring(err):sub(1,125))
 
-        warn('[FTW V41 loop]',err)
+        warn('[FTW AutoWord loop]',err)
 
         task.wait(.65)
 
@@ -1080,9 +1081,7 @@ task.spawn(function()
 
 end)
 
-print('[FTW V41] Interface initialized')
-
-
+print('[FTW AutoWord] Interface initialized')
 
 end
 
@@ -1090,8 +1089,16 @@ end
 
 local httpRequest = request or http_request or (syn and syn.request) or (http and http.request)
 
-local deviceFile = 'xenox_installation_v1.txt'
-local keyCacheFile = 'xenox_key_cache_v1.txt'
+local deviceFile = 'ftw_autoword_installation_v1.txt'
+local keyCacheFile = 'ftw_autoword_key_cache_v1.txt'
+local cacheFiles = {keyCacheFile, 'xenox_key_cache_v1.txt'}
+
+local function validKey(value)
+    if type(value) ~= 'string' then return nil end
+    value = value:match('^%s*(.-)%s*$'):upper()
+    local suffix = value:match('^FTW%-(%x+)$') or value:match('^XENO%-(%x+)$')
+    return (suffix and #suffix == 64) and value or nil
+end
 
 local function cacheKey(key)
     if type(writefile) == 'function' then pcall(writefile, keyCacheFile, key) end
@@ -1099,27 +1106,30 @@ end
 
 local function readCachedKey()
     if type(readfile) ~= 'function' then return nil end
-    local ok, value = pcall(readfile, keyCacheFile)
-    if not ok or type(value) ~= 'string' then return nil end
-    value = value:match('^%s*(.-)%s*$'):upper()
-    return (#value == 69 and value:match('^XENO%-%x+$')) and value or nil
+    for _, file in ipairs(cacheFiles) do
+        local ok, value = pcall(readfile, file)
+        local key = ok and validKey(value)
+        if key then return key end
+    end
+    return nil
 end
 
 local function clearCachedKey()
-    if type(delfile) == 'function' then
-        pcall(delfile, keyCacheFile)
-    elseif type(writefile) == 'function' then
-        pcall(writefile, keyCacheFile, '')
+    for _, file in ipairs(cacheFiles) do
+        local removed = false
+        if type(delfile) == 'function' then removed = pcall(delfile, file) end
+        if not removed and type(writefile) == 'function' then pcall(writefile, file, '') end
     end
 end
 
-local deviceToken = env.XENO_DEVICE_TOKEN
+local deviceToken = env.FTW_AUTOWORD_DEVICE_TOKEN or env.XENO_DEVICE_TOKEN
 
 if type(readfile) == 'function' then
 
-    local ok, saved = pcall(readfile, deviceFile)
-
-    if ok and type(saved) == 'string' and #saved == 64 and saved:match('^[a-f0-9]+$') then deviceToken = saved end
+    for _, file in ipairs({deviceFile, 'xenox_installation_v1.txt'}) do
+        local ok, saved = pcall(readfile, file)
+        if ok and type(saved) == 'string' and #saved == 64 and saved:match('^[a-f0-9]+$') then deviceToken = saved; break end
+    end
 
 end
 
@@ -1129,7 +1139,7 @@ if type(deviceToken) ~= 'string' or #deviceToken ~= 64 or not deviceToken:match(
 
 end
 
-env.XENO_DEVICE_TOKEN = deviceToken
+env.FTW_AUTOWORD_DEVICE_TOKEN = deviceToken
 
 if type(writefile) == 'function' then pcall(writefile, deviceFile, deviceToken) end
 
@@ -1141,7 +1151,7 @@ local activeKey, deadline, running = nil, 0, false
 
 local gui = Instance.new('ScreenGui')
 
-gui.Name = 'XENOX_KeySystem'
+gui.Name = 'FTW_AutoWord_KeySystem'
 
 gui.ResetOnSpawn = false
 
@@ -1201,7 +1211,7 @@ local function text(class, content, y, height)
 
 end
 
-local title = text('TextLabel', 'XENOX | Access key', 14, 35)
+local title = text('TextLabel', 'FTW AutoWord | Access key', 14, 35)
 
 title.Font = Enum.Font.GothamBold; title.TextSize = 22
 
@@ -1249,7 +1259,7 @@ local function cleanup()
 
 end
 
-env.XENO_KEY_STOP = cleanup
+env.FTW_AUTOWORD_KEY_STOP = cleanup
 
 close.Activated:Connect(cleanup)
 
@@ -1297,7 +1307,7 @@ local function api(path, key)
 
     local code = tonumber(response.StatusCode) or 0
 
-    if code < 200 or code >= 300 then return nil, data.error or 'Invalid or expired key for this installation.' end
+    if code < 200 or code >= 300 then return nil, data.error or 'Invalid or expired key for this installation.', code end
 
     return data
 
@@ -1333,16 +1343,16 @@ end)
 
 local function authorize(key, automatic)
     if busy or not alive then return end
-    key = tostring(key or ''):match('^%s*(.-)%s*$'):upper()
-    if #key ~= 69 or not key:match('^XENO%-%x+$') then
-        if not automatic then show('Enter a valid XENO- key.') end
+    key = validKey(key)
+    if not key then
+        if not automatic then show('Enter a valid FTW- key.') end
         return
     end
 
     busy = true
     show(automatic and 'Checking saved key...' or 'Verifying key...')
     local began = os.clock()
-    local data, err = api('/api/verify', key)
+    local data, err, statusCode = api('/api/verify', key)
     if alive then
         if data and data.valid == true and type(data.expiresIn) == 'number'
             and data.expiresIn > os.clock() - began then
@@ -1351,16 +1361,16 @@ local function authorize(key, automatic)
             cacheKey(key)
             generation = generation + 1
             gui.Enabled = false
-            local ok, launchErr = pcall(launchXenox)
+            local ok, launchErr = pcall(launchAutoWord)
             running = ok
             if not ok then
                 stopScript()
-                show('Xenox failed to start: '..tostring(launchErr):sub(1, 120))
+                show('FTW AutoWord failed to start: '..tostring(launchErr):sub(1, 120))
             end
         else
             -- A server-confirmed invalid/expired key must not be reused.
             -- Connection failures leave the saved key for a later retry.
-            if data or (err and not (err:find('reach') or err:find('requests'))) then
+            if data or statusCode == 403 then
                 clearCachedKey()
             end
             show(err or 'The key has expired. Get a new key.')
@@ -1397,13 +1407,13 @@ task.spawn(function()
 
             local version, began = generation, os.clock()
 
-            local data, err = api('/api/verify', activeKey)
+            local data, err, statusCode = api('/api/verify', activeKey)
 
             if alive and running and generation == version then
 
                 if not data or data.valid ~= true or type(data.expiresIn) ~= 'number' or data.expiresIn <= os.clock() - began then
 
-                    if data then clearCachedKey() end; stopScript(); show(err or 'Access expired. Verify a new key to continue.')
+                    if data or statusCode == 403 then clearCachedKey() end; stopScript(); show(err or 'Access expired. Verify a new key to continue.')
 
                 else deadline = began + math.min(data.expiresIn, 86400) end
 
